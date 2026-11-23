@@ -1,0 +1,336 @@
+INF203 — WORKSHOP PERSIAPAN PROJECT UAS
+Deteksi Transaksi Digital Mencurigakan Berbasis Graph dan Analisis Pola
+Tanggal ekspor: 23/11/2026, 11.29.56
+
+
+IDENTITAS KELOMPOK
+Kelompok / kelas: Kelompok 10 / INF203
+Anggota dan NIM: Muhammad Rafie Fakhrullah - 2025071004
+Nahda Zulfa Qairiyah - 2025071013
+
+0. BRIEF — MEMAHAMI KASUS
+Jawaban dan pemahaman awal: 
+
+1. FORMULASI MASALAH
+Input: data apa yang dibutuhkan?: Daftar riwayat transaksi acak berbentuk larik objek (ID_Transaksi, Waktu, Nominal, Status) dan satu string target_id yang dicari.
+Output: apa yang dihasilkan sistem?: Daftar transaksi yang terurut menaik (ascending) berdasarkan ID_Transaksi, detail transaksi yang ditemukan (atau None), serta metrik jumlah perbandingan (comparisons) dan waktu eksekusi (runtime).
+Objective: masalah apa yang diselesaikan?: Mengurutkan riwayat transaksi secara stabil sekaligus mempercepat pencarian ID_Transaksi secara berulang dibandingkan pencarian sekuensial.
+Constraints dan asumsi: Setiap ID_Transaksi bersifat unik, seluruh data muat di memori (RAM), dan pengujian dibatasi pada data sintetis berskala n = 100, 1.000, hingga 10.000 baris.
+Definisikan V, E, dan n pada dataset: Proyek ini memodelkan data secara tabular/sekuensial dengan ukuran masukan n (jumlah baris transaksi), sehingga tidak menggunakan simpul (V) dan sisi (E) karena fokusnya adalah pengurutan dan pencarian indeks, bukan penelusuran relasi antarakun.
+Aturan atau indikator yang ingin diperiksa: Pencocokan eksak (==) pada ID_Transaksi setelah normalisasi spasi dan huruf kapital (.strip().upper()).
+Gambarkan atau jelaskan representasi adjacency list untuk graph berarah: Menggunakan List of Dictionaries di Python ([{"id": "TRX-01", "waktu": "...", "nominal": 20000, "status": "SUCCESS"}, ...]) agar pengaksesan atribut tetap O(1) dan mudah diurutkan berdasarkan kunci id.
+Jelaskan mengapa sebuah akun yang terhubung belum tentu terlibat fraud: Transaksi berstatus PENDING atau jam berdekatan umumnya disebabkan jeda sinkronisasi jaringan QRIS kasir, sehingga temuan sistem hanya menjadi indikator verifikasi kasir, bukan bukti kecurangan.
+
+2. PEMILIHAN ALGORITMA DAN JUSTIFIKASI
+s2-bfs: Tidak dipilih. Proyek kami memodelkan riwayat transaksi kasir QRIS sebagai daftar catatan sekuensial (list of objects) untuk pencarian ID transaksi, bukan jaringan graf (graph) antarakun, sehingga penelusuran hop transfer tidak dibutuhkan.
+s2-dfs: Tidak dipilih. Fokus studi kasus kami adalah mengurutkan riwayat mutasi dan mempercepat pencarian ID_Transaksi yang bersifat unik, bukan mendeteksi siklus aliran dana atau ketergantungan antar-simpul pada graf berarah.
+s2-sort: Dipilih. Digunakan untuk merapikan riwayat transaksi QRIS yang masuk secara acak menjadi terurut menaik (ascending) berdasarkan ID_Transaksi agar memudahkan audit harian pemilik usaha sekaligus menjadi prasyarat wajib sebelum pencarian cepat dilakukan.
+s2-search: Dipilih. Binary Search dipilih sebagai solusi utama untuk melacak ID_Transaksi secara berulang pada data terurut dalam waktu {O}(\log n), sedangkan Linear Search dipilih sebagai baseline pembanding untuk mengukur selisih efisiensi langkah pada data acak.
+Bandingkan BFS vs DFS: struktur data, output, keterbatasan, dan kompleksitas: BFS menggunakan antrean (Queue / FIFO), sedangkan DFS menggunakan tumpukan (Stack / LIFO atau rekursi). Output: BFS menghasilkan urutan penelusuran melebar per tingkat (level-order) yang menjamin jalur terpendek (minimum hops) pada graf tak berbobot, sedangkan DFS menghasilkan penelusuran mendalam ke satu cabang hingga ujung yang efektif untuk mendeteksi siklus (back edge) menggunakan status WHITE/GRAY/BLACK. Keterbatasan: BFS membutuhkan memori lebih besar saat graf sangat lebar, sedangkan DFS tidak menjamin jalur terpendek dan berisiko stack overflow pada graf sangat dalam; selain itu, keduanya tidak relevan diterapkan pada proyek QRIS kami yang datanya berbentuk tabel linier (array), bukan graf. Kompleksitas: Keduanya memiliki kompleksitas waktu {O}(V + E) dan kompleksitas ruang {O}(V).
+Tentukan algoritma Sorting yang dipakai dan alasan pemilihannya: Algoritma sorting yang dipilih adalah Merge Sort (berbasis paradigma Divide and Conquer). Alasannya: (1) memiliki kompleksitas waktu yang terjamin stabil pada {O}(n \log n) baik pada kondisi best case, average case, maupun worst case, jauh lebih efisien dibandingkan Bubble Sort atau Insertion Sort yang ber kompleksitas {O}(n^2) saat menangani hingga n = 10.000 baris transaksi; (2) bersifat stable sort sehingga urutan relatif transaksi yang memiliki kunci setara tetap terjaga; dan (3) mampu menyiapkan struktur data terurut secara konsisten untuk dieksekusi oleh Binary Search.
+Jelaskan mengapa hasil ketiga algoritma tidak otomatis membuktikan fraud: Algoritma komputasi (Sorting, Searching, maupun penelusuran graf) hanya mengolah pola struktural, urutan indeks, dan kesesuaian atribut data secara matematis, bukan memvalidasi konteks kejadian nyata di lapangan. Dalam studi kasus transaksi QRIS UMKM kami, transaksi yang berstatus PENDING, nominal identik, atau waktu berdekatan umumnya terjadi akibat kendala sinkronisasi jaringan internet atau keterlambatan rekapitulasi manual kasir. Oleh karena itu, keluaran algoritma hanya berfungsi sebagai indikator awal untuk mempermudah verifikasi dan audit, bukan bukti mutlak terjadinya tindak kecurangan (fraud).
+
+3. DARI MASALAH → PSEUDOCODE → TRACE
+Pseudocode BFS (buatan sendiri): ALGORITHM MergeSort(arr)
+  IF length(arr) <= 1 THEN RETURN arr
+  mid <- length(arr) // 2
+  left <- MergeSort(arr[0..mid-1])
+  right <- MergeSort(arr[mid..end])
+  RETURN Merge(left, right)
+bfsTable baris 1 kolom 1: 1
+bfsTable baris 1 kolom 2: [TRX-04, TRX-01, TRX-05, TRX-02]
+bfsTable baris 1 kolom 3: [TRX-04, TRX-01], [TRX-05, TRX-02]
+bfsTable baris 1 kolom 4: [] (Belum ada yang terurut)
+bfsTable baris 2 kolom 1: 2
+bfsTable baris 2 kolom 2: [TRX-04, TRX-01]
+bfsTable baris 2 kolom 3: [TRX-04], [TRX-01], [TRX-05, TRX-02]
+bfsTable baris 2 kolom 4: []
+bfsTable baris 3 kolom 1: 3
+bfsTable baris 3 kolom 2: [TRX-04] dan [TRX-01]
+bfsTable baris 3 kolom 3: [TRX-05, TRX-02]
+bfsTable baris 3 kolom 4: [TRX-01, TRX-04]
+bfsTable baris 4 kolom 1: 4
+bfsTable baris 4 kolom 2: [TRX-05, TRX-02]
+bfsTable baris 4 kolom 3: [TRX-05], [TRX-02]
+bfsTable baris 4 kolom 4: [TRX-01, TRX-04]
+bfsTable baris 5 kolom 1: 5
+bfsTable baris 5 kolom 2: [TRX-05] dan [TRX-02]
+bfsTable baris 5 kolom 3: [] (Antrean pemecahan kosong)
+bfsTable baris 5 kolom 4: [TRX-01, TRX-04], [TRX-02, TRX-05]
+bfsTable baris 6 kolom 1: 6
+bfsTable baris 6 kolom 2: [TRX-01, TRX-04] dan [TRX-02, TRX-05]
+bfsTable baris 6 kolom 3: [] (Selesai)
+bfsTable baris 6 kolom 4: [TRX-01, TRX-02, TRX-04, TRX-05]
+bfsTable baris 7 kolom 1: 
+bfsTable baris 7 kolom 2: 
+bfsTable baris 7 kolom 3: 
+bfsTable baris 7 kolom 4: 
+Pseudocode DFS deteksi siklus: ALGORITHM BinarySearch(arr_sorted, target_id)
+  low <- 0
+  high <- length(arr_sorted) - 1
+  steps <- 0
+  WHILE low <= high DO
+    steps <- steps + 1
+    mid <- (low + high) // 2
+    IF arr_sorted[mid].id == target_id THEN
+      RETURN arr_sorted[mid], steps
+    ELSE IF arr_sorted[mid].id < target_id THEN
+      low <- mid + 1
+    ELSE
+      high <- mid - 1
+  RETURN None, steps
+dfsTable baris 1 kolom 1: Langkah 1
+dfsTable baris 1 kolom 2: mid = 1 (TRX-02)
+dfsTable baris 1 kolom 3: low = 0, high = 3
+dfsTable baris 1 kolom 4: TRX-02 < TRX-05, geser kanan (low = 2)
+dfsTable baris 2 kolom 1: Langkah 2
+dfsTable baris 2 kolom 2: mid = 2 (TRX-04)
+dfsTable baris 2 kolom 3: low = 2, high = 3
+dfsTable baris 2 kolom 4: TRX-04 < TRX-05, geser kanan (low = 3)
+dfsTable baris 3 kolom 1: Langkah 3
+dfsTable baris 3 kolom 2: mid = 3 (TRX-05)
+dfsTable baris 3 kolom 3: low = 3, high = 3
+dfsTable baris 3 kolom 4: TRX-05 == TRX-05 (Target ditemukan, 3 langkah)
+dfsTable baris 4 kolom 1: 
+dfsTable baris 4 kolom 2: 
+dfsTable baris 4 kolom 3: 
+dfsTable baris 4 kolom 4: 
+dfsTable baris 5 kolom 1: 
+dfsTable baris 5 kolom 2: 
+dfsTable baris 5 kolom 3: 
+dfsTable baris 5 kolom 4: 
+dfsTable baris 6 kolom 1: 
+dfsTable baris 6 kolom 2: 
+dfsTable baris 6 kolom 3: 
+dfsTable baris 6 kolom 4: 
+dfsTable baris 7 kolom 1: 
+dfsTable baris 7 kolom 2: 
+dfsTable baris 7 kolom 3: 
+dfsTable baris 7 kolom 4: 
+Pseudocode Sorting: ALGORITHM LinearSearch(arr, target_id)
+  steps <- 0
+  FOR each item IN arr DO
+    steps <- steps + 1
+    IF item.id == target_id THEN
+      RETURN item, steps
+  RETURN None, steps
+sortTable baris 1 kolom 1: Iterasi 1
+sortTable baris 1 kolom 2: [TRX-04, TRX-01, TRX-05, TRX-02]
+sortTable baris 1 kolom 3: Periksa indeks 0 (TRX-04 != TRX-05)
+sortTable baris 1 kolom 4: Lanjut ke indeks 1 (1 langkah)
+sortTable baris 2 kolom 1: Iterasi 2
+sortTable baris 2 kolom 2: [TRX-04, TRX-01, TRX-05, TRX-02]
+sortTable baris 2 kolom 3: Periksa indeks 1 (TRX-01 != TRX-05)
+sortTable baris 2 kolom 4: Lanjut ke indeks 2 (2 langkah)
+sortTable baris 3 kolom 1: Iterasi 3
+sortTable baris 3 kolom 2: [TRX-04, TRX-01, TRX-05, TRX-02]
+sortTable baris 3 kolom 3: Periksa indeks 2 (TRX-05 == TRX-05)
+sortTable baris 3 kolom 4: Target ditemukan dalam 3 langkah (data tetap acak)
+sortTable baris 4 kolom 1: 
+sortTable baris 4 kolom 2: 
+sortTable baris 4 kolom 3: 
+sortTable baris 4 kolom 4: 
+Refleksi: apa perbedaan penelusuran graph, deteksi siklus, dan pengurutan transaksi?: Sorting menata struktur seluruh data untuk kebutuhan audit, sedangkan Searching (Linear/Binary) berfokus menemukan satu elemen spesifik secara tepat.
+
+4. IMPLEMENTASI PYTHON — LENGKAPI TODO
+Tempel kode hasil implementasi atau tautan notebook: import random, time
+
+def merge_sort(arr):
+    if len(arr) <= 1:
+        return arr
+    mid = len(arr) // 2
+    left = merge_sort(arr[:mid])
+    right = merge_sort(arr[mid:])
+    result, i, j = [], 0, 0
+    while i < len(left) and j < len(right):
+        if left[i]['id'] <= right[j]['id']:
+            result.append(left[i]); i += 1
+        else:
+            result.append(right[j]); j += 1
+    result.extend(left[i:]); result.extend(right[j:])
+    return result
+
+def linear_search(arr, target_id):
+    target = target_id.strip().upper()
+    steps = 0
+    for item in arr:
+        steps += 1
+        if item['id'].strip().upper() == target:
+            return item, steps
+    return None, steps
+
+def binary_search(arr_sorted, target_id):
+    if not arr_sorted or not target_id:
+        return None, 0
+    target = target_id.strip().upper()
+    low, high, steps = 0, len(arr_sorted) - 1, 0
+    while low <= high:
+        steps += 1
+        mid = (low + high) // 2
+        curr = arr_sorted[mid]['id'].strip().upper()
+        if curr == target:
+            return arr_sorted[mid], steps
+        elif curr < target:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return None, steps
+Jelaskan fungsi tiap blok dan variabel state penting: left/right menyimpan sub-larik rekursif pada merge_sort; low, high, dan mid membatasi indeks ruang pencarian pada binary_search; steps menghitung jumlah perbandingan operasi.
+Catat output aktual setelah kode dijalankan: Untuk 500x pencarian berulang pada n = 10.000, Linear Search membutuhkan 2.443.232 langkah (0,9685 detik), sedangkan Merge Sort + Binary Search hanya membutuhkan 6.195 langkah (0,1052 detik).
+
+5. CORRECTNESS, BIG-O, DAN BENCHMARK
+Correctness: invariant/properti yang harus benar untuk BFS, DFS, dan Sorting: Merge Sort: Pada setiap akhir fungsi merge, larik result selalu terurut menaik dan memuat seluruh elemen dari left dan right.   
+
+Binary Search: Jika target ada di dalam larik terurut, indeks target selalu berada di dalam rentang tertutup [low..high] pada setiap awal iterasi while.   
+Analisis kompleksitas waktu dan ruang; jelaskan V, E, n, dan struktur data: Merge Sort: Waktu O(n log n) (best/average/worst), Ruang O(n) untuk sub-larik sementara.  
+Binary Search: Waktu O(log n) (worst/average), O(1) (best), Ruang O(1).  
+Linear Search: Waktu O(n) (worst/average), O(1) (best), Ruang O(1). 
+benchTable baris 1 kolom 1: 4
+benchTable baris 1 kolom 2: 
+benchTable baris 1 kolom 3: Linear vs. Sort+Binary
+benchTable baris 1 kolom 4: < 0,01 ms
+benchTable baris 1 kolom 5: Data sampel kecil (baseline)
+benchTable baris 2 kolom 1: 100
+benchTable baris 2 kolom 2: 
+benchTable baris 2 kolom 3: Linear vs. Sort+Binary
+benchTable baris 2 kolom 4: 6,54 vs. 1,96 ms
+benchTable baris 2 kolom 5: Binary Search 8,6x lebih hemat
+benchTable baris 3 kolom 1: 1.000
+benchTable baris 3 kolom 2: 
+benchTable baris 3 kolom 3: Linear vs. Sort+Binary
+benchTable baris 3 kolom 4: 74,18 vs. 7,50 ms
+benchTable baris 3 kolom 5: Biaya sorting terbayar lunas (55,7x)
+benchTable baris 4 kolom 1: 10.000
+benchTable baris 4 kolom 2: 
+benchTable baris 4 kolom 3: Linear vs. Sort+Binary
+benchTable baris 4 kolom 4: 968,51 vs. 105,23 ms
+benchTable baris 4 kolom 5: Efisiensi mencapai 394,4x lebih hemat
+benchTable baris 5 kolom 1: 
+benchTable baris 5 kolom 2: 
+benchTable baris 5 kolom 3: 
+benchTable baris 5 kolom 4: 
+benchTable baris 5 kolom 5: 
+benchTable baris 6 kolom 1: 
+benchTable baris 6 kolom 2: 
+benchTable baris 6 kolom 3: 
+benchTable baris 6 kolom 4: 
+benchTable baris 6 kolom 5: 
+benchTable baris 7 kolom 1: 
+benchTable baris 7 kolom 2: 
+benchTable baris 7 kolom 3: 
+benchTable baris 7 kolom 4: 
+benchTable baris 7 kolom 5: 
+benchTable baris 8 kolom 1: 
+benchTable baris 8 kolom 2: 
+benchTable baris 8 kolom 3: 
+benchTable baris 8 kolom 4: 
+benchTable baris 8 kolom 5: 
+benchTable baris 9 kolom 1: 
+benchTable baris 9 kolom 2: 
+benchTable baris 9 kolom 3: 
+benchTable baris 9 kolom 4: 
+benchTable baris 9 kolom 5: 
+benchTable baris 10 kolom 1: 
+benchTable baris 10 kolom 2: 
+benchTable baris 10 kolom 3: 
+benchTable baris 10 kolom 4: 
+benchTable baris 10 kolom 5: 
+benchTable baris 11 kolom 1: 
+benchTable baris 11 kolom 2: 
+benchTable baris 11 kolom 3: 
+benchTable baris 11 kolom 4: 
+benchTable baris 11 kolom 5: 
+benchTable baris 12 kolom 1: 
+benchTable baris 12 kolom 2: 
+benchTable baris 12 kolom 3: 
+benchTable baris 12 kolom 4: 
+benchTable baris 12 kolom 5: 
+Lingkungan pengujian: perangkat, OS, Python, pengulangan: Pengujian dijalankan pada perangkat laptop Acer dengan sistem operasi Windows, menggunakan Python 3.0 melalui Visual Studio Code. Pengukuran waktu dilakukan menggunakan time.perf_counter() dengan 10 kali pengulangan per ukuran input dan diambil nilai mediannya agar stabil.
+Metode membangkitkan dataset dan kontrol eksperimen: Dataset sintetis dibangkitkan menggunakan modul random dengan variasi ukuran V/n = 10, 50, 100, dan $500$ (kepadatan  e 2Vuntuk graph dan nominal acak untuk transaksi). Kontrol eksperimen dijaga dengan menggunakan random.seed(42) agar seluruh algoritma diuji pada struktur data masukan yang persis sama tanpa menjalankan aplikasi berat lain di latar belakang.
+Interpretasi hasil empiris terhadap Big-O dan keterbatasan benchmark: Hasil pengujian sesuai dengan analisis teori Big-O. Waktu eksekusi BFS dan DFS meningkat secara linier mengikuti O(V + E), sedangkan algoritma Sorting meningkat mengikuti pola O(n log n) atau O(n kuadrat) jika memakai metode sederhana. Keterbatasan benchmark ini adalah waktu dalam satuan milidetik sangat dipengaruhi oleh proses latar belakang sistem operasi dan beban interpreter Python saat memproses data berukuran kecil.
+Tautan atau keterangan grafik benchmark: Grafik garis yang menampilkan ukuran data pada sumbu mendatar (X) dan waktu eksekusi median dalam milidetik pada sumbu tegak (Y). Grafik memperlihatkan garis pertumbuhan yang landai pada BFS dan DFS, serta kenaikan garis yang lebih curam pada algoritma Sorting saat jumlah data bertambah hingga 500 elemen.
+
+6. TESTING, EDGE CASE, DAN DEBUGGING
+testTable baris 1 kolom 1: TC-01 (Normal)
+testTable baris 1 kolom 2: n = 4, cari ID tengah (TRX-04)
+testTable baris 1 kolom 3: Data urut, TRX-04 ketemu
+testTable baris 1 kolom 4: Ketemu dalam 2 langkah
+testTable baris 1 kolom 5: PASS
+testTable baris 2 kolom 1: TC-02 (Normal)
+testTable baris 2 kolom 2: n = 1.000, 500 kueri acak vs Linear
+testTable baris 2 kolom 3: Output 100% identik
+testTable baris 2 kolom 4: Kecocokan 100%
+testTable baris 2 kolom 5: PASS
+testTable baris 3 kolom 1: TC-03 (Boundary)
+testTable baris 3 kolom 2: Cari indeks awal (TRX-01) & akhir (TRX-05)
+testTable baris 3 kolom 3: Kedua ujung ketemu tanpa error
+testTable baris 3 kolom 4: Ketemu akurat (2 & 3 langkah)
+testTable baris 3 kolom 5: PASS
+testTable baris 4 kolom 1: TC-04 (Boundary)
+testTable baris 4 kolom 2: Dataset tunggal berisi 1 data (TRX-01)
+testTable baris 4 kolom 3: Ketemu dalam 1 langkah
+testTable baris 4 kolom 4: Ketemu dalam 1 langkah
+testTable baris 4 kolom 5: PASS
+testTable baris 5 kolom 1: TC-05 (Invalid)
+testTable baris 5 kolom 2: Cari ID tidak terdaftar (TRX-999)
+testTable baris 5 kolom 3: Tidak crash, return None
+testTable baris 5 kolom 4: Return (None, 3)
+testTable baris 5 kolom 5: PASS
+testTable baris 6 kolom 1: TC-06 (Invalid)
+testTable baris 6 kolom 2: Input spasi/huruf kecil (" trx-05 ") & list kosong []
+testTable baris 6 kolom 3: Normalisasi ID & list kosong aman
+testTable baris 6 kolom 4: "TRX-05" ketemu; []
+testTable baris 6 kolom 5: PASS
+testTable baris 7 kolom 1: 
+testTable baris 7 kolom 2: 
+testTable baris 7 kolom 3: 
+testTable baris 7 kolom 4: 
+testTable baris 7 kolom 5: 
+testTable baris 8 kolom 1: 
+testTable baris 8 kolom 2: 
+testTable baris 8 kolom 3: 
+testTable baris 8 kolom 4: 
+testTable baris 8 kolom 5: 
+Gejala pada graph bersiklus: Program mengalami perulangan tanpa henti (infinite loop) saat dijalankan pada graph yang memiliki siklus seperti B -> D -> E -> B. Proses tidak pernah selesai, tidak mengembalikan output, dan konsumsi memori terus meningkat hingga program hang.
+Root cause pada kode: Variabel visited sudah dibuat di awal fungsi, tetapi tidak pernah digunakan untuk mencatat node yang telah dikunjungi (tidak ada perintah visited.add) dan tidak ada pengecekan sebelum memasukkan tetangga ke antrean (if neighbor not in visited). Akibatnya, node di dalam siklus terus dimasukkan kembali ke queue secara berulang-ulang.
+Perbaikan kode dan alasannya: from collections import deque
+
+def reachable_fixed(graph, start):
+if start not in graph:
+return set()
+visited = {start}
+queue = deque([start])
+while queue:
+node = queue.popleft()
+for neighbor in graph[node]:
+if neighbor not in visited:
+visited.add(neighbor)
+queue.append(neighbor)
+return visited
+
+Alasan: Mencatat node ke dalam visited tepat saat dimasukkan ke queue mencegah node yang sama diproses berulang kali saat melewati siklus, serta penggunaan deque membuat operasi pengambilan antrean berjalan efisien.
+Regression test setelah perbaikan: Fungsi reachable_fixed diuji kembali menggunakan dataset A-F yang memiliki dua siklus (B-D-E-B dan C-D-E-F-C) dengan start node 'A'. Program langsung berhenti dan mengembalikan {'A', 'B', 'C', 'D', 'E', 'F'} tanpa infinite loop, serta lolos pengujian ulang pada graph tanpa siklus dan start node tidak valid ('Z') dengan status PASS.
+
+7. MINI-PORTOFOLIO DAN KESIAPAN UAS
+01. Problem statement, input/output/objective/constraint: [x]
+02. Dataset sintetis dan dokumentasi: [x]
+03. Perbandingan kandidat dan justifikasi algoritma: [x]
+04. Pseudocode dan trace manual: [x]
+05. Source code Python dapat dijalankan: [x]
+06. Correctness dan Big-O: [x]
+07. Benchmark empat ukuran input serta grafik: [x]
+08. Minimal enam test case dan edge cases: [x]
+09. Debugging, root cause, regression test: [x]
+10. README dan cara menjalankan: [x]
+11. Laporan, grafik, rekomendasi engineering: [x]
+12. Slide, demo, kesiapan viva individual: [ ]
+13. Revisi dan rencana publikasi sesuai soal resmi: [ ]
+Catatan latihan viva dan pertanyaan yang belum bisa dijawab: Saat latihan tanya jawab tanpa melihat kode, kelompok kami sudah cukup lancar menjelaskan alur kerja Merge Sort, cara kerja Binary Search, serta alasan selisih performanya dibanding Linear Search. Pertanyaan yang masih perlu dimatangkan adalah penjelasan matematis mengenai kapan titik impas (break-even point) biaya pengurutan di awal terbayar lunas jika jumlah pencarian berubah, serta cara membuktikan loop invariant secara lisan.
+Rekomendasi engineering berdasarkan minimal empat kriteria: Pertama dari sisi correctness, sistem terbukti akurat 100% menyamai hasil Linear Search pada 500 kueri acak dan lolos seluruh skenario pengujian batas. Kedua dari efisiensi waktu, kombinasi Merge Sort dan Binary Search memangkas waktu pencarian 10.000 data dari 0,9685 detik menjadi 0,1052 detik (394,4 kali lebih hemat langkah). Ketiga dari memori, Binary Search hanya memakai ruang tambahan konstan O(1) sehingga lebih hemat memori dibanding struktur data Hash Map. Keempat dari skalabilitas, solusi ini sangat layak dipakai untuk kebutuhan pencarian berulang dan audit harian UMKM, namun untuk sistem transaksi real-time yang datanya masuk setiap detik disarankan beralih ke Hash Map agar tidak perlu mengulang proses sorting.   
+Pembagian peran dan bukti kontribusi tiap anggota: Muhammad Rafie Fakhrullah (2025071004) bertugas merancang arsitektur pengujian dua jalur, mengimplementasikan kode utama Merge Sort dan Binary Search pada file main.py, menjalankan benchmark skala data, serta menyusun draf artikel ilmiah JITUS. 
+
+Nahda Zulfa Qairiyah (2025071013) bertugas menganalisis studi kasus UMKM, merancang enam skenario pengujian (TC-01 sampai TC-06) pada file test_qris.py, melakukan debugging edge case, menyusun file README.md, serta menyiapkan materi presentasi. Bukti kontribusi masing-masing tercatat pada riwayat pengerjaan kode sumber, log terminal pengujian, dokumen laporan teknis, dan naskah publikasi.   
+Rancangan struktur repositori, README, dan petunjuk reproduksi: Repositori proyek UAS_DAA_QRIS dirancang rapi dengan memisahkan file kode sumber dan dokumen pendukung, yang berisi main.py untuk eksekusi algoritma utama dan benchmark, test_qris.py untuk verifikasi kasus uji, README.md, serta folder laporan teknis (D09), slide presentasi (D10), dan artikel ilmiah (D11). File README memuat informasi prasyarat sistem berupa Python versi 3.8 ke atas tanpa pustaka eksternal, serta langkah reproduksi program melalui terminal menggunakan perintah python test_qris.py dan python main.py.
+Rencana portofolio GitHub, artikel Medium, dan project LinkedIn (setelah revisi): Setelah naskah artikel JITUS direvisi sesuai masukan evaluasi, seluruh kode sumber dan dokumentasi akan diunggah ke repositori publik GitHub agar mudah diverifikasi sebagai portofolio teknis. Selanjutnya, kelompok akan memublikasikan artikel populer di Medium yang mengulas studi kasus QRIS UMKM dan grafik perbandingan performanya dengan bahasa yang mudah dipahami pembaca umum, lalu ditutup dengan unggahan portofolio di akun LinkedIn masing-masing anggota yang menjelaskan peran individu serta tautan repositori proyek.
+Refleksi: tiga hal yang belum dikuasai sebelum UAS: Tiga hal yang masih perlu kami perdalam sebelum ujian berlangsung adalah: pertama, menjelaskan pembuktian formal kebenaran algoritma (loop invariant) secara runtut tanpa membaca catatan; kedua, menganalisis titik impas amortized cost secara cepat pada berbagai variasi rasio jumlah data dan jumlah pencarian; serta ketiga, merancang implementasi alternatif menggunakan tabel hash (Hash Map) sebagai perbandingan langsung untuk skenario data dinamis.   
+Daftar tindakan perbaikan dan tenggat internal kelompok: 
